@@ -13,7 +13,8 @@ export interface Columns{
     created_at:string,
     board_id:string,
     title:string,
-    sort_order:number
+    sort_order:number,
+    user_id:string
 }
 
 export interface Tasks{
