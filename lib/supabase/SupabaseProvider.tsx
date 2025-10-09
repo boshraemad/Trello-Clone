@@ -32,7 +32,7 @@ export default function SupabaseProvider({children}:{children:React.ReactNode}){
 
     },[session])
     return <Context.Provider value={{supabase , isLoaded}}>
-        {!session ? <div>is Loading...</div> : children}
+        {children}
     </Context.Provider>
 }
 

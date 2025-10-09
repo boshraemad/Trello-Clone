@@ -1,17 +1,20 @@
 "use client"
 
-import { ArrowLeft, ArrowRight, MoreHorizontal, Trello } from "lucide-react"
+import { ArrowLeft, ArrowRight, MoreHorizontal, Trello , Filter } from "lucide-react"
 import { SignInButton , SignUpButton, UserButton } from "@clerk/nextjs"
 import { Button } from "./ui/button"
 import { useUser } from "@clerk/nextjs"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { Badge } from "./ui/badge"
 
 interface BoardProps{
     boardTitle?:string,
-    onEdit?:()=>void
+    onEdit?:()=>void,
+    onFilter?:()=>void,
+    filterCount?:number
 }
- export default function Navbar({boardTitle , onEdit}:BoardProps){
+ export default function Navbar({boardTitle , onEdit , onFilter , filterCount=0}:BoardProps){
     const {isSignedIn , user} = useUser();
     const pathName = usePathname();
     const isDashboardPage:boolean = pathName === "/dashboard";
@@ -53,6 +56,16 @@ interface BoardProps{
                             </Button>
                         }
                     </div>
+                </div>
+                <div className="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
+                    <Button variant="outline" size="sm" className={`text-xs sm:text-sm ${filterCount > 0 ? "bg-blue-100 border-blue-200" : ""}`} onClick={onFilter}>
+                        <Filter/>
+                        <span>Filter</span>
+                        {
+                            filterCount > 0 && <Badge variant="secondary" className="text-sm ml-1 sm:ml-2 bg-blue-100 border-blue-200">{filterCount}</Badge>
+                        }
+                    </Button>
+                    
                 </div>
             </div>
         </div>

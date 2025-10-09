@@ -24,7 +24,11 @@ export interface Tasks{
     assignee:string | null,
     description:string | null,
     due_date:string | null,
-    priority: "low" | "medium" | "high",
+    priority: "Low" | "Medium" | "High",
     sort_order:number,
     column_id:string
+}
+
+export type columnsWithTasks = Columns & {
+    tasks:Tasks[]
 }
