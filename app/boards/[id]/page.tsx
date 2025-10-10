@@ -14,10 +14,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select , SelectTrigger , SelectContent , SelectItem , SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { DndContext, DragStartEvent , DragEndEvent , DragOverEvent, rectIntersection, useDroppable, DragOverlay } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {CSS} from '@dnd-kit/utilities';
+import { Tasks } from "@/lib/supabase/models";
 
-function Column({columnInfo , children , onEdit , onCreateTask }:{columnInfo:columnsWithTasks , children:React.ReactNode , onEditColumn:(column:columnsWithTasks)=>void , onCreateTask:(taskData:any)=>Promise<void>}){
+function DroppableColumn({columnInfo , children , onEdit , onCreateTask }:{columnInfo:columnsWithTasks , children:React.ReactNode , onEditColumn:(column:columnsWithTasks)=>void , onCreateTask:(taskData:any)=>Promise<void>}){
+    const {setNodeRef , isOver} = useDroppable({id:columnInfo.id})
+
     return (
-        <div className="lg:w-80 flex-shrink-0 w-full">
+        <div ref={setNodeRef} className={`lg:w-80 flex-shrink-0 w-full ${isOver? "bg-blue-50 rounded-lg" : ""}`}>
             <div className="bg-white rounded-lg shadow-sm border">
                 <div className="p-3 sm:p-4 border-b">
                     <div className="flex items-center justify-between">
@@ -31,15 +37,102 @@ function Column({columnInfo , children , onEdit , onCreateTask }:{columnInfo:col
                     </div>
                 </div>
                 {/* column content */}
-                <div className="p-2">{children}</div>
+                <div className="p-2">{children}
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <Button variant="ghost" className="w-full text-gray-500 hover:text-gray-700 mt-3">
+                            <Plus/>
+                            Add Task
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="w-[95vw] max-w-[425px] mx-auto">
+            <DialogHeader>
+                    <DialogTitle>Filter Tasks</DialogTitle>
+                    <p className="text-sm text-gray-600">filter tasks by priority,assignee or due date</p>
+                </DialogHeader>
+                <form className="space-y-4" onSubmit={onCreateTask}>
+                    <div className="space-y-2">
+                        <Label>Title *</Label>
+                        <Input id="title" placeholder="add task title" name="title"/>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Description *</Label>
+                        <Textarea id="description" placeholder="add task description" name="description" rows={3}/>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Assignee</Label>
+                        <Input id="assignee" placeholder="who should do it ?" name="assignee"/>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Priority</Label>
+                       <Select defaultValue="Medium" name="priority">
+                        <SelectTrigger><SelectValue/></SelectTrigger>
+                     <SelectContent>
+                        {
+                            ["Low" , "Medium" , "High"].map((priority , key)=><SelectItem value={priority} key={key}>{priority}</SelectItem>)
+                        }
+                        </SelectContent>
+                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Due Date</Label>
+                        <Input type="date" name="dueDate"/>
+                    </div>
+                    <div className="space-y-2 flex items-center justify-end pt-4">
+                        <Button variant="default" type="submit">Create Task</Button>
+                    </div>
+                </form>
+                </DialogContent>
+                </Dialog>
+                </div>
             </div>
         </div>
     )
 }
 
-function Task({task}:{task:Tasks}){
+function SortableTask({task}:{task:Tasks}){
+    const {attributes , listeners ,setNodeRef , transform , transition , isDragging} = useSortable({id:task.id})
+    const styles={
+        transform : CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1
+    }
     return(
-        <Card className="cursor-pointer hover:shadow-md transition-shadow">
+        <div ref={setNodeRef} style={styles}{...listeners} {...attributes}>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow ">
+            <CardContent className="p-3 sm:p-4">
+                <div className="space-y-2 sm:space-y-3">
+                    <div className="flex items-start justify-between">
+                        <h4 className="font-medium text-sm text-gray-900 min-w-0 flex-1 leading-tight pr-2">{task.title}</h4>
+                    </div>
+                    <p className="text-xs text-gray-600 line-clamp-2">{task.description || "no description."}</p>
+                     {/* task meta */}
+                     <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-1 sm:space-x-2 min-w-0">{task.assignee && (
+                            <div className="flex items-center space-x-1 sm:space-x-2 text-xs text-gray-500">
+                                <User className="w-3 h-3"/>
+                                <span className="truncate">{task.assignee}</span>
+                            </div>
+                        )}
+                        {task.due_date && (
+                            <div className="flex items-center space-x-1 sm:space-x-2 text-xs text-gray-500">
+                                <Calendar className="w-3 h-3"/>
+                                <span className="truncate">{task.due_date}</span>
+                            </div>
+                        )}
+                        <div className={`w-2 h-2 flex-shrink-0 rounded-full ${task.priority === "Low" ? "bg-red-500" : task.priority === "Medium" ? "bg-yellow-500" : "bg-green-500"}`}/>
+                        </div>
+                     </div>
+                </div>
+            </CardContent>
+        </Card>
+        </div>
+    )
+}
+
+function TaskOverlay({task} : {task:Tasks}){
+    return(
+        <Card className="cursor-pointer hover:shadow-md transition-shadow ">
             <CardContent className="p-3 sm:p-4">
                 <div className="space-y-2 sm:space-y-3">
                     <div className="flex items-start justify-between">
@@ -70,11 +163,12 @@ function Task({task}:{task:Tasks}){
 }
 export default function BoardPage(){
     const {id}=useParams<{id:string}>();
-    const {board , columns , error , loading , updateBoard , createRealTask} = useBoard(id);
+    const {board , columns , setColumns , error , loading , updateBoard , createRealTask} = useBoard(id);
     const [isEditingTitle , setIsEditingTitle] = useState(false);
     const [isFilterOpen , setIsFilterOpen] = useState(false);
     const [newTitle , setNewTitle] = useState<string | undefined>("");
     const [newColor , setNewColor] = useState("");
+    const [activeTask , setActiveTask] = useState<Tasks | null>(null);
     async function handleUpdateBoard(){
         if(!newTitle?.trim() || !board) return;
 
@@ -120,6 +214,50 @@ export default function BoardPage(){
             const trigger = document.querySelector('[data-state = "open"') as HTMLElement
             if(trigger) trigger.click();
         }
+
+    }
+
+    function handleDragStart(event:DragStartEvent){
+        const taskId = event.active.id as string;
+        const task = columns.flatMap((col)=>col.tasks).find((task)=>task.id === taskId);
+
+        if(task){
+            setActiveTask(task);
+        }
+    }
+    function handleDragOver(event:DragOverEvent){
+        const {active , over} = event;
+        if(!over) return;
+
+        const activeId = active.id as string;
+        const overId = over.id as string;
+
+        const sourceColumn = columns.find((col)=>col.tasks.some((task)=>task.id === activeId))
+        const targetColumn = columns.find((col)=>col.tasks.some((task)=>task.id === overId))
+
+        if(!sourceColumn || !targetColumn) return;
+        if(sourceColumn.id = targetColumn.id){
+            const activeIndex=sourceColumn.tasks.findIndex((task)=>task.id === activeId)
+            const overIndex=targetColumn.tasks.findIndex((task)=>task.id === overId)
+
+            if(activeIndex !== overIndex){
+                setColumns((prev:columnsWithTasks[])=>{
+                    const newColumns=[...prev];
+                    const column = newColumns.find((col)=>col.id === sourceColumn.id)
+                    if(column){
+                        const tasks = [...column.tasks]
+                        const [removed] = tasks.splice(activeIndex , 1);
+                        tasks.splice(overIndex,0,removed)
+                        column.tasks=tasks;
+                    }
+                    return newColumns;
+                })
+            }
+        }
+
+    }
+    function handleDragEnd(event:DragEndEvent){
+        
     }
     return <div className='min-h-screen bg-gray-100'>
        <div> <Navbar boardTitle={board?.title} onEdit={()=>{
@@ -260,17 +398,27 @@ export default function BoardPage(){
             </div>
 
             {/*tasks columns */}
-           <div className="mt-2 sm:mt-4 flex flex-col lg:flex-row lg:space-x-6 lg:overflow-x-auto lg:pb-6 lg:px-2 lg:mx-2 lg:[&::-webkit-scrollbar-track]:h-2 lg:[&::-webkit-scrollbar-track]:bg-gray-100 lg:[&::-webkit-scrollbar-thumb]:bg-gray-300 lg:[&::-webkit-scrollbar-thumb]:rounded-full space-y-4 lg:space-y-0">
+         <DndContext collisionDetection={rectIntersection} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}
+          >
+         <div className="mt-2 sm:mt-4 flex flex-col lg:flex-row lg:space-x-6 lg:overflow-x-auto lg:pb-6 lg:px-2 lg:mx-2 lg:[&::-webkit-scrollbar-track]:h-2 lg:[&::-webkit-scrollbar-track]:bg-gray-100 lg:[&::-webkit-scrollbar-thumb]:bg-gray-300 lg:[&::-webkit-scrollbar-thumb]:rounded-full space-y-4 lg:space-y-0">
                 {
-                    columns.map((column , key)=><Column key={key} columnInfo={column} onCreateTask={createTask} onEditColumn={()=>{}}>
+                    columns.map((column , key)=><DroppableColumn key={key} columnInfo={column} onCreateTask={handleCreateTask} onEditColumn={()=>{}}>
+                        <SortableContext items={column.tasks.map((task)=>task.id)}
+                         strategy={verticalListSortingStrategy}
+                         >
                         <div className="space-y-3">
                             {
-                                column.tasks.map((task, key)=><Task key={key} task={task}/>)
+                                column.tasks.map((task, key)=><SortableTask key={key} task={task}/>)
                             }
                         </div>
-                    </Column>)
+                        </SortableContext>
+                    </DroppableColumn>)
                 }
+                <DragOverlay>
+                    {activeTask ? <TaskOverlay task={activeTask}/> : null}
+                </DragOverlay>
            </div>
+         </DndContext>
         </main>
     </div>
 }
