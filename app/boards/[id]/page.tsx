@@ -14,17 +14,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select , SelectTrigger , SelectContent , SelectItem , SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { DndContext, DragStartEvent , DragEndEvent , DragOverEvent, rectIntersection, useDroppable, DragOverlay } from "@dnd-kit/core";
+import { DndContext, DragStartEvent , DragEndEvent , DragOverEvent, rectIntersection, useDroppable, DragOverlay, useSensor, PointerSensor } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import {CSS} from '@dnd-kit/utilities';
 import { Tasks } from "@/lib/supabase/models";
+import { useSensors } from "@dnd-kit/core";
 
 function DroppableColumn({columnInfo , children , onEdit , onCreateTask }:{columnInfo:columnsWithTasks , children:React.ReactNode , onEditColumn:(column:columnsWithTasks)=>void , onCreateTask:(taskData:any)=>Promise<void>}){
     const {setNodeRef , isOver} = useDroppable({id:columnInfo.id})
 
     return (
         <div ref={setNodeRef} className={`lg:w-80 flex-shrink-0 w-full ${isOver? "bg-blue-50 rounded-lg" : ""}`}>
-            <div className="bg-white rounded-lg shadow-sm border">
+            <div className={`bg-white rounded-lg shadow-sm border ${isOver ? "ring-2 ring-blue-300" : ""}`}>
                 <div className="p-3 sm:p-4 border-b">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2 min-w-0">
@@ -163,12 +164,19 @@ function TaskOverlay({task} : {task:Tasks}){
 }
 export default function BoardPage(){
     const {id}=useParams<{id:string}>();
-    const {board , columns , setColumns , error , loading , updateBoard , createRealTask} = useBoard(id);
+    const {board , columns , setColumns , error , loading , updateBoard , createRealTask , moveTask} = useBoard(id);
     const [isEditingTitle , setIsEditingTitle] = useState(false);
     const [isFilterOpen , setIsFilterOpen] = useState(false);
     const [newTitle , setNewTitle] = useState<string | undefined>("");
     const [newColor , setNewColor] = useState("");
     const [activeTask , setActiveTask] = useState<Tasks | null>(null);
+    const sensors = useSensors(useSensor(
+        PointerSensor , {
+            activationConstraint:{
+                distance:8,
+            }
+        }
+    ))
     async function handleUpdateBoard(){
         if(!newTitle?.trim() || !board) return;
 
@@ -239,6 +247,7 @@ export default function BoardPage(){
         if(sourceColumn.id = targetColumn.id){
             const activeIndex=sourceColumn.tasks.findIndex((task)=>task.id === activeId)
             const overIndex=targetColumn.tasks.findIndex((task)=>task.id === overId)
+            
 
             if(activeIndex !== overIndex){
                 setColumns((prev:columnsWithTasks[])=>{
@@ -256,8 +265,33 @@ export default function BoardPage(){
         }
 
     }
-    function handleDragEnd(event:DragEndEvent){
-        
+    async function handleDragEnd(event:DragEndEvent){
+        const {active , over} = event;
+        if(!over) return;
+
+        const taskId = active.id as string;
+        const overId = over.id as string;
+
+        const targetColumn = columns.find((col)=>col.id === overId);
+        if(targetColumn){
+            const sourceColumn = columns.find((col)=>col.tasks.some((task)=>task.id === taskId))
+            if(sourceColumn && sourceColumn.id !== targetColumn.id){
+                await moveTask(taskId , targetColumn.id , targetColumn.tasks.length )
+            }
+        }else{
+            //check to see if were dropping on another task
+            const sourceColumn = columns.find((col)=>col.tasks.some((task)=>task.id === taskId))
+            const targetColumn = columns.find((col)=>col.tasks.some((task)=>task.id === overId))
+
+            if(sourceColumn && targetColumn){
+                const oldIndex=sourceColumn.tasks.findIndex((task)=>task.id === taskId)
+                const newIndex=targetColumn.tasks.findIndex((task)=>task.id === overId)
+
+                if(oldIndex !== newIndex){
+                    await moveTask(taskId , targetColumn.id , newIndex)
+                }
+            }
+        }
     }
     return <div className='min-h-screen bg-gray-100'>
        <div> <Navbar boardTitle={board?.title} onEdit={()=>{
@@ -398,7 +432,7 @@ export default function BoardPage(){
             </div>
 
             {/*tasks columns */}
-         <DndContext collisionDetection={rectIntersection} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}
+         <DndContext sensors={sensors} collisionDetection={rectIntersection} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}
           >
          <div className="mt-2 sm:mt-4 flex flex-col lg:flex-row lg:space-x-6 lg:overflow-x-auto lg:pb-6 lg:px-2 lg:mx-2 lg:[&::-webkit-scrollbar-track]:h-2 lg:[&::-webkit-scrollbar-track]:bg-gray-100 lg:[&::-webkit-scrollbar-thumb]:bg-gray-300 lg:[&::-webkit-scrollbar-thumb]:rounded-full space-y-4 lg:space-y-0">
                 {

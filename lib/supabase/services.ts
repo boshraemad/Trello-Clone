@@ -101,6 +101,15 @@ export const tasksServices={
         }
 
         return data || {}
+    },
+
+    async moveTask(supabase:SupabaseClient , taskId:string , newColumnId:string , newOrder:number){
+        const {data , error} = await supabase.from("tasks").update({column_id:newColumnId , sort_order:newOrder}).eq("id" , taskId)
+        if(error){
+            throw new Error("can not move task")
+        }
+
+        return data;
     }
 }
 // `*,columns!inner(board_id)`
