@@ -20,7 +20,7 @@ import {CSS} from '@dnd-kit/utilities';
 import { Tasks } from "@/lib/supabase/models";
 import { useSensors } from "@dnd-kit/core";
 
-function DroppableColumn({columnInfo , children , onEdit , onCreateTask }:{columnInfo:columnsWithTasks , children:React.ReactNode , onEditColumn:(column:columnsWithTasks)=>void , onCreateTask:(taskData:any)=>Promise<void>}){
+function DroppableColumn({columnInfo , children , onEditColumn , onCreateTask }:{columnInfo:columnsWithTasks , children:React.ReactNode , onEditColumn:(column:columnsWithTasks)=>void , onCreateTask:(taskData:any)=>Promise<void>}){
     const {setNodeRef , isOver} = useDroppable({id:columnInfo.id})
 
     return (
@@ -32,7 +32,7 @@ function DroppableColumn({columnInfo , children , onEdit , onCreateTask }:{colum
                             <h3 className="font-semibold text-sm sm:text-base text-gray-900">{columnInfo.title}</h3>
                             <Badge variant="secondary" className="text-xs flex-shrink-0">{columnInfo.tasks.length}</Badge>
                         </div>
-                        <Button variant="ghost" size="sm" className="flex-shrink-0">
+                        <Button variant="ghost" size="sm" className="flex-shrink-0" onClick={()=>onEditColumn(columnInfo)}>
                             <MoreHorizontal/>
                         </Button>
                     </div>
@@ -164,9 +164,14 @@ function TaskOverlay({task} : {task:Tasks}){
 }
 export default function BoardPage(){
     const {id}=useParams<{id:string}>();
-    const {board , columns , setColumns , error , loading , updateBoard , createRealTask , moveTask} = useBoard(id);
+    const {board , columns , setColumns , error , loading , updateBoard , createRealTask , moveTask , createColumn , updateColumn} = useBoard(id);
     const [isEditingTitle , setIsEditingTitle] = useState(false);
     const [isFilterOpen , setIsFilterOpen] = useState(false);
+    const [isCreatingColumn , setIsCreatingColumn] = useState(false);
+    const [isEditingColumn , setIsEditingColumn] = useState(false);
+    const [editingColumnTitle , setEditingColumnTitle] = useState("");
+    const [editingColumn , setEditingColumn] = useState<columnsWithTasks | null>(null)
+    const [newColumnTitle , setNewColumnTitle] = useState("")
     const [newTitle , setNewTitle] = useState<string | undefined>("");
     const [newColor , setNewColor] = useState("");
     const [activeTask , setActiveTask] = useState<Tasks | null>(null);
@@ -293,7 +298,36 @@ export default function BoardPage(){
             }
         }
     }
-    return <div className='min-h-screen bg-gray-100'>
+
+    async function handleCreateColumn(e:React.FormEvent){
+        e.preventDefault();
+
+        if(!newColumnTitle.trim()) return;
+
+        await createColumn(newColumnTitle);
+        setNewColumnTitle("");
+        setIsCreatingColumn(false);
+    }
+
+    
+    async function handleUpdatingColumn(e:React.FormEvent){
+        e.preventDefault();
+
+        if(!editingColumnTitle.trim() || !editingColumn) return;
+
+        await updateColumn(editingColumn.id , editingColumnTitle.trim());
+        setEditingColumnTitle("");
+        setIsEditingColumn(false);
+        setEditingColumn(null);
+    }
+
+    function handleEditingColumn(column:columnsWithTasks){
+        setIsEditingColumn(true)
+        setEditingColumnTitle(column.title)
+        setEditingColumn(column)
+    }
+    return <>
+    <div className='min-h-screen bg-gray-100'>
        <div> <Navbar boardTitle={board?.title} onEdit={()=>{
         setNewTitle(board?.title ?? "")
         setNewColor(board?.color ?? "")
@@ -436,7 +470,7 @@ export default function BoardPage(){
           >
          <div className="mt-2 sm:mt-4 flex flex-col lg:flex-row lg:space-x-6 lg:overflow-x-auto lg:pb-6 lg:px-2 lg:mx-2 lg:[&::-webkit-scrollbar-track]:h-2 lg:[&::-webkit-scrollbar-track]:bg-gray-100 lg:[&::-webkit-scrollbar-thumb]:bg-gray-300 lg:[&::-webkit-scrollbar-thumb]:rounded-full space-y-4 lg:space-y-0">
                 {
-                    columns.map((column , key)=><DroppableColumn key={key} columnInfo={column} onCreateTask={handleCreateTask} onEditColumn={()=>{}}>
+                    columns.map((column , key)=><DroppableColumn key={key} columnInfo={column} onCreateTask={handleCreateTask} onEditColumn={handleEditingColumn}>
                         <SortableContext items={column.tasks.map((task)=>task.id)}
                          strategy={verticalListSortingStrategy}
                          >
@@ -448,6 +482,9 @@ export default function BoardPage(){
                         </SortableContext>
                     </DroppableColumn>)
                 }
+                <div className="w-full lg:flex-shrink-0 lg:w-80">
+                    <Button onClick={()=>setIsCreatingColumn(true)} variant="outline" className="w-full min-h-[200px] border-dashed border-2 text-gray-500 hover:text-gray-700"><Plus/>Add Another List</Button>
+                </div>
                 <DragOverlay>
                     {activeTask ? <TaskOverlay task={activeTask}/> : null}
                 </DragOverlay>
@@ -455,4 +492,41 @@ export default function BoardPage(){
          </DndContext>
         </main>
     </div>
+    <Dialog open={isCreatingColumn} onOpenChange={setIsCreatingColumn}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Add new Column to organize your tasks</DialogTitle>
+                </DialogHeader>
+                <form className="space-y-4" onSubmit={handleCreateColumn}>
+                    <div className="space-y-2">
+                        <Label>Column Title</Label>
+                        <Input id="columnTitle" value={newColumnTitle} onChange={(e)=>setNewColumnTitle(e.target.value)} placeholder="enter column title..." required/>
+                    </div>
+                    <div className="flex justify-end items-center space-x-2">
+                        <Button variant="outline" type="button" onClick={()=>setIsCreatingColumn(false)}>Cancel</Button>
+                        <Button type="submit">Create Column</Button>
+                    </div>
+                </form>
+            </DialogContent>
+    </Dialog>
+    <Dialog open={isEditingColumn} onOpenChange={setIsEditingColumn}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Edit Column</DialogTitle>
+                </DialogHeader>
+                <form className="space-y-4" onSubmit={handleUpdatingColumn}>
+                    <div className="space-y-2">
+                        <Label>Column Title</Label>
+                        <Input id="columnTitle" value={editingColumnTitle} onChange={(e)=>setEditingColumnTitle(e.target.value)} placeholder="enter column title..." required/>
+                    </div>
+                    <div className="flex justify-end items-center space-x-2">
+                        <Button variant="outline" type="button" onClick={()=>{
+                            setIsEditingColumn(false);
+                        }}>Cancel</Button>
+                        <Button type="submit">Edit Column</Button>
+                    </div>
+                </form>
+            </DialogContent>
+    </Dialog>
+    </>
 }

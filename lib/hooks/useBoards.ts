@@ -1,5 +1,5 @@
 "use client"
-import { boardDataServices, boardServices, tasksServices } from "../supabase/services"
+import { boardDataServices, boardServices, columnServices, tasksServices } from "../supabase/services"
 import { useCallback, useEffect, useState } from "react";
 import { Board, Columns, columnsWithTasks, Tasks } from "../supabase/models";
 import { useUser } from "@clerk/nextjs";
@@ -61,6 +61,7 @@ export function useBoard(boardId : string){
     const [columns , setColumns] = useState<columnsWithTasks[]>([]);
     const [loading , setLoading] = useState(true);
     const [error , setError] = useState<string | null>(null);
+    const {user} = useUser();
     const loadBoard = useCallback(async()=>{
         if(!boardId) return;
         try{
@@ -155,5 +156,28 @@ export function useBoard(boardId : string){
         }
     }
 
-    return {board , columns , setColumns , loading , error , updateBoard , createRealTask , moveTask}
+    async function createColumn(columnTitle:string){
+
+        if(!board || !user) throw new Error("Board not loaded");
+        try{
+           const newColumn = await columnServices.createColumn(supabase! , {title:columnTitle , board_id:board.id , sort_order:columns.length , user_id:user.id});
+           setColumns((prev)=>[...prev , {...newColumn , tasks:[]}])
+           return newColumn;
+        }catch(err){
+            setError(err instanceof Error ? err.message : "Failed to create Column")
+        }
+    }
+
+    async function updateColumn(columnId:string , columnTitle:string){
+        if(!board || !user) throw new Error("Board not loaded");
+        try{
+           const newColumn = await columnServices.updateColumn(supabase! , columnId , columnTitle);
+           setColumns((prev)=> prev.map((col)=>col.id === columnId ? {...col , title:columnTitle} : col))
+           return newColumn;
+        }catch(err){
+            setError(err instanceof Error ? err.message : "Failed to create Column")
+        }
+    }
+
+    return {board , columns , setColumns , loading , error , updateBoard , createRealTask , moveTask , createColumn , updateColumn}
 }

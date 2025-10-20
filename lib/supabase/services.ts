@@ -1,5 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Board , Columns , Tasks } from "./models";
+import { Board , Columns , columnsWithTasks, Tasks } from "./models";
 
 export const boardServices={
     async getBoards(supabase:SupabaseClient , userId:string):Promise<Board[]>{
@@ -32,6 +32,11 @@ export const columnServices={
     },
     async createColumn(supabase:SupabaseClient , column:Omit<Columns,"id" | "created_at">):Promise<Columns>{
         const {data , error} = await supabase.from("columns").insert(column).select().single()
+        if(error) throw error
+        return data || []
+    },
+    async updateColumn(supabase:SupabaseClient ,columnId:string , columnTitle:string):Promise<Columns>{
+        const {data , error} = await supabase.from("columns").update({ title:columnTitle}).eq("id" , columnId).select().single();
         if(error) throw error
         return data || []
     }
