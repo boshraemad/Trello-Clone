@@ -175,6 +175,11 @@ export default function BoardPage(){
     const [newTitle , setNewTitle] = useState<string | undefined>("");
     const [newColor , setNewColor] = useState("");
     const [activeTask , setActiveTask] = useState<Tasks | null>(null);
+    const [filters , setFilters] = useState({
+        priority:[] as string[],
+        assignee:[] as string[],
+        dueDate: null as string | null
+    })
     const sensors = useSensors(useSensor(
         PointerSensor , {
             activationConstraint:{
@@ -182,6 +187,18 @@ export default function BoardPage(){
             }
         }
     ))
+
+    function handleFilterChange(type: "priority" | "assignee" | "dueDate" , value:string | string[] | null){
+        setFilters((prev)=>({...prev , [type]:value}))
+    }
+
+    function handleClearFilters(){
+        setFilters({
+            priority:[] as string[],
+            assignee:[] as string[],
+            dueDate: null as string | null
+        })
+    }
     async function handleUpdateBoard(){
         if(!newTitle?.trim() || !board) return;
 
@@ -326,13 +343,36 @@ export default function BoardPage(){
         setEditingColumnTitle(column.title)
         setEditingColumn(column)
     }
+
+    const filteredColumns = columns.map((col)=>({
+        ...col,
+        tasks:col.tasks.filter((task)=>{
+            //filter by priority
+            if(filters.priority.length > 0 && !filters.priority.includes(task.priority)){
+                return false;
+            }
+            
+            //filter by dueDate
+            if(task.due_date && filters.dueDate){
+                const taskDate = new Date(task.due_date).toDateString();
+                const filterDate = new Date(filters.dueDate).toDateString();
+                if(taskDate !== filterDate){
+                    return false;
+                }
+            }
+
+            return true;
+        })
+    }))
     return <>
     <div className='min-h-screen bg-gray-100'>
        <div> <Navbar boardTitle={board?.title} onEdit={()=>{
         setNewTitle(board?.title ?? "")
         setNewColor(board?.color ?? "")
         setIsEditingTitle(true)
-       }} onFilter={()=>{setIsFilterOpen(true)}} filterCount={2}/></div>
+       }} onFilter={()=>{setIsFilterOpen(true)}} filterCount={
+        Object.values(filters).reduce((count , v)=> count + (Array.isArray(v) ? v.length :  v!==null ? 1 : 0) , 0)
+       }/></div>
 
         <Dialog open={isEditingTitle} onOpenChange={setIsEditingTitle}>
             <DialogContent className="w-[95vw] max-w-[425px] mx-auto">
@@ -383,7 +423,10 @@ export default function BoardPage(){
                <div className="space-y-2">
                     <Label htmlFor="priority">Priority</Label>
                    <div className="flex items-center flex-wrap gap-2">
-                   {["Low","Medium","High"].map((priority,key)=><Button key={key} variant="outline">
+                   {["Low","Medium","High"].map((priority,key)=><Button onClick={()=>{
+                        const newPriorities = filters.priority.includes(priority) ? filters.priority.filter((p)=>p!==priority) : [...filters.priority , priority]
+                        handleFilterChange("priority" , newPriorities)
+                   }} key={key} variant={filters.priority.includes(priority) ? "default" : "outline"}>
                         {priority}
                     </Button>)}
                    </div>
@@ -398,10 +441,10 @@ export default function BoardPage(){
                 </div> */}
                  <div className="space-y-2">
                     <Label htmlFor="priority">Due Date</Label>
-                    <Input type="date"/>
+                    <Input type="date" value={filters.dueDate || ""} onChange={(e)=>handleFilterChange("dueDate" , e.target.value || null)}/>
                 </div>
                 <div className="flex items-center justify-between">
-                    <Button variant="secondary">Clear Filters</Button>
+                    <Button variant="secondary" onClick={handleClearFilters}>Clear Filters</Button>
                     <Button variant="default" onClick={()=>setIsFilterOpen(false)}>Apply Filters</Button>
                 </div>
                </div>
@@ -470,7 +513,7 @@ export default function BoardPage(){
           >
          <div className="mt-2 sm:mt-4 flex flex-col lg:flex-row lg:space-x-6 lg:overflow-x-auto lg:pb-6 lg:px-2 lg:mx-2 lg:[&::-webkit-scrollbar-track]:h-2 lg:[&::-webkit-scrollbar-track]:bg-gray-100 lg:[&::-webkit-scrollbar-thumb]:bg-gray-300 lg:[&::-webkit-scrollbar-thumb]:rounded-full space-y-4 lg:space-y-0">
                 {
-                    columns.map((column , key)=><DroppableColumn key={key} columnInfo={column} onCreateTask={handleCreateTask} onEditColumn={handleEditingColumn}>
+                    filteredColumns.map((column , key)=><DroppableColumn key={key} columnInfo={column} onCreateTask={handleCreateTask} onEditColumn={handleEditingColumn}>
                         <SortableContext items={column.tasks.map((task)=>task.id)}
                          strategy={verticalListSortingStrategy}
                          >
