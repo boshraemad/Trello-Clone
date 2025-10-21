@@ -8,11 +8,22 @@ import { useBoards } from "@/lib/hooks/useBoards";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Link from "next/link";
+import { Label } from "@/components/ui/label";
+import { Board } from "@/lib/supabase/models";
 export default function Dashboard(){
     const {user} = useUser();
     const {loading , error , boards , createBoard} = useBoards();
     const [viewMode , setViewMode] = useState<"Grid" | "List">("Grid");
+    const [isFilterOpen , setIsFilterOpen] = useState<boolean>(false);
+    const [filters , setFilters] = useState({
+        search:"",
+        date:{
+            start:null as string | null , 
+            end:null as string | null
+        }
+    })
     const handleCreateBoard=async()=>{
         if(!user) return;
         await createBoard({title:"new board" , description:"team board" , color:"bg-pink-500" , userId : user.id});
@@ -28,6 +39,22 @@ export default function Dashboard(){
         return <div>
             <p>{error}</p>
         </div>
+    }
+
+    const filteredBoards = boards.filter((board:Board)=>{
+        const matchesSearch = board.title.toLowerCase().includes(filters.search.toLowerCase());
+        const matchesDateRange = !filters.date.start || new Date(board.created_at) >= new Date(filters.date.start) && (!filters.date.end || new Date(board.created_at) <= new Date(filters.date.end))
+        return matchesSearch && matchesDateRange;
+    });
+
+    function handleClearFiletrs(){
+        setFilters({
+            search:"",
+            date:{
+                start:null as string | null , 
+                end:null as string | null
+            }
+        })
     }
     return(
        <div className="min-h-screen bg-gray-50">
@@ -105,8 +132,8 @@ export default function Dashboard(){
                         <p  className="font-bold text-xl sm:text-2xl text-gray-900">Your Boards</p>
                         <p className="text-gray-600">Manage Your Projects and Tasks</p>
                     </div>
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center mb-4 sm:mb-6 space-y-2 sm:space-y-0 space-x-2">
-                        <div className="flex items-center  p-1 space-x-1 bg-white border-1">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center mb-4 sm:mb-6 space-y-2 sm:space-y-0 space-x-2 sm:space-x-4">
+                        <div className="flex items-center rounded-lg p-1 space-x-1 bg-white border-1">
                             <Button variant={viewMode === "Grid" ? "default" : "ghost"} onClick={()=>setViewMode("Grid")}>
                                 <Grid3X3/>
                             </Button>
@@ -114,26 +141,22 @@ export default function Dashboard(){
                                 <List/>
                             </Button>
                         </div>
-                        <Button variant="outline">
+                        <Button variant="outline" onClick={()=>setIsFilterOpen(true)}>
                                 <Filter/>
                                 Filter
-                        </Button>
-                        <Button onClick={handleCreateBoard}>
-                            <Plus/>
-                            create new board
                         </Button>
                     </div>
                 </div>
                 <div className="relative mb-4 sm:mb-6">
                     <Search className="text-gray-400 w-5 h-5 absolute top-1/2 left-3 transform -translate-y-1/2"/>
-                    <Input id="search" placeholder="search boards..." className="pl-10"/>
+                    <Input id="search" placeholder="search boards..." className="pl-10" onChange={(e)=>setFilters((prev)=>({...prev , search:e.target.value}))}/>
                 </div>
              </div>
              {/* boards Grid/List */}
              {boards.length === 0 ? <div>No Boards yet</div> : viewMode === "Grid" ?
               <div className=" grid xl:grid-cols-4 lg:grid-cols-3 sm:grid-cols-2 grid-cols-1 gap-2">
                 {
-                    boards.map((board , key)=><Link href={`boards/${board.id}`} key={key}>
+                    filteredBoards.map((board , key)=><Link href={`boards/${board.id}`} key={key}>
                     <Card className="hover:shadow-lg transition-shadow">
                         <CardHeader className="pb-3">
                             <div className="flex items-center justify-between">
@@ -154,7 +177,7 @@ export default function Dashboard(){
                 <div>
                 <Card className=" group border-2 border-dashed border-gray-300 hover:border-blue-600 transition-colors cursor-pointer">
                     <CardContent className="flex flex-col items-center justify-center h-full min-h-[223px]">
-                        <Plus className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400 group-hover:text-blue-600 mb-2"/>
+                        <Plus className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400 group-hover:text-blue-600 mb-2" onClick={()=>handleCreateBoard()}/>
                         <p className="text-sm sm:text-base text-gray-600 group-hover:text-blue-600 font-medium">Create New Board</p>
                     </CardContent>
                 </Card>
@@ -197,6 +220,47 @@ export default function Dashboard(){
              }
             
         </main>
+        <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+             <DialogContent className="w-[95vw] max-w-[425px] mx-auto">
+                <DialogHeader>
+                    <DialogTitle>Filter Boards</DialogTitle>
+                    <p className="text-sm text-gray-600">Filter Boards by Title and dueDate</p>
+                </DialogHeader>
+                <div className="space-y-4">
+                    <div className='space-y-2'>
+                        <Label>Search</Label>
+                        <Input id="search" placeholder="search boards Title..." onChange={(e)=>setFilters((prev)=>({...prev , search:e.target.value}))}/>
+                    </div>
+                    <div className='space-y-2'>
+                        <Label>Date Range</Label>
+                        <div className="grid sm:grid-cols-2 grid-cols-1 gap-2">
+                        <div>
+                        <Label className="text-xs">Start Date</Label>
+                        <Input type="date" onChange={(e)=>setFilters((prev)=>({...prev , date:{
+                            ...prev.date,
+                            start:e.target.value || null
+                        }}))}/>
+                        </div>
+                        <div>
+                        <Label className="text-xs">End Date</Label>
+                        <Input type="date" onChange={(e)=>setFilters((prev)=>({...prev , date:{
+                            ...prev.date,
+                            end:e.target.value || null
+                        }}))}/>
+                        </div>
+                        </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row pt-4 space-y-2 sm:space-x-2 sm:space-y-0 justify-between">
+                        <Button variant="outline" onClick={handleClearFiletrs}>
+                            Clear Filters
+                        </Button>
+                        <Button variant='default' onClick={()=>setIsFilterOpen(false)}>
+                            apply Filters
+                        </Button>
+                    </div>
+                </div>
+             </DialogContent>
+        </Dialog>
        </div>
     )
 }
