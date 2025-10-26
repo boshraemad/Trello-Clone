@@ -12,11 +12,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import Link from "next/link";
 import { Label } from "@/components/ui/label";
 import { Board } from "@/lib/supabase/models";
+import { usePlan } from "@/lib/contexts/PlanContext";
+import { useRouter } from "next/navigation";
 export default function Dashboard(){
     const {user} = useUser();
     const {loading , error , boards , createBoard} = useBoards();
     const [viewMode , setViewMode] = useState<"Grid" | "List">("Grid");
     const [isFilterOpen , setIsFilterOpen] = useState<boolean>(false);
+    const {isFreeUser} = usePlan();
+    const [showUpgradeDialog , setShowUpgradeDialog] = useState<boolean>(false);
+    const router = useRouter();
     const [filters , setFilters] = useState({
         search:"",
         date:{
@@ -24,10 +29,15 @@ export default function Dashboard(){
             end:null as string | null
         }
     })
+    const canCreateBoard = !isFreeUser || boards.length <1;
     const handleCreateBoard=async()=>{
-        if(!user) return;
-        await createBoard({title:"new board" , description:"team board" , color:"bg-pink-500" , userId : user.id});
+        if(!canCreateBoard){
+            setShowUpgradeDialog(true);
+            return;
+        }
+        await createBoard({title:"new board" , description:"team board" , color:"bg-pink-500" , userId : user?.id});
     }
+
     if(loading){
         return <div>
             <Loader2/>
@@ -131,6 +141,7 @@ export default function Dashboard(){
                     <div>
                         <p  className="font-bold text-xl sm:text-2xl text-gray-900">Your Boards</p>
                         <p className="text-gray-600">Manage Your Projects and Tasks</p>
+                        {isFreeUser && <p className="text-sm text-gray-600">Free Plan: {boards.length}/1 boards used</p>}
                     </div>
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center mb-4 sm:mb-6 space-y-2 sm:space-y-0 space-x-2 sm:space-x-4">
                         <div className="flex items-center rounded-lg p-1 space-x-1 bg-white border-1">
@@ -145,6 +156,7 @@ export default function Dashboard(){
                                 <Filter/>
                                 Filter
                         </Button>
+                        <Button onClick={handleCreateBoard}><Plus/>Create Board</Button>
                     </div>
                 </div>
                 <div className="relative mb-4 sm:mb-6">
@@ -261,6 +273,18 @@ export default function Dashboard(){
                 </div>
              </DialogContent>
         </Dialog>
+        <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
+             <DialogContent className="w-[95vw] max-w-[425px] mx-auto">
+                <DialogHeader>
+                    <DialogTitle>Upgrade To Create More Boards</DialogTitle>
+                    <p className="text-sm text-gray-600">Free users can create one board. upgrade to Pro or Enterprise to create Unlimited Boards</p>
+                </DialogHeader>
+                <div className="flex justify-end space-x-4 pt-4">
+                    <Button variant="outline" onClick={()=>setShowUpgradeDialog(false)}>Cancel</Button>
+                    <Button onClick={()=>{router.push("/pricing")}}>View Plans</Button>
+                </div>
+                </DialogContent>
+                </Dialog>
        </div>
     )
 }
